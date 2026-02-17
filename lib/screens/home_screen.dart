@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../providers/submission_provider.dart';
-import '../utils/constants.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
+import '../widgets/ticket_card.dart';
 import 'camera_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -13,19 +15,37 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   int _queuedCount = 0;
+  late final AnimationController _entryController;
+  late final Animation<double> _contentAnimation;
+  late final Animation<double> _fabAnimation;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _refreshQueueCount();
+
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _contentAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+    );
+    _fabAnimation = CurvedAnimation(
+      parent: _entryController,
+      curve: const Interval(0.3, 0.8, curve: Curves.easeOut),
+    );
+    _entryController.forward();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _entryController.dispose();
     super.dispose();
   }
 
@@ -46,6 +66,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final submissionState = ref.watch(submissionProvider);
+    final colorScheme = Theme.of(context).colorScheme;
 
     final user = authState.when(
       loading: () => null,
@@ -56,7 +77,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('gPark'),
+        title: Text(
+          'gPark',
+          style: AppTypography.brand(context).copyWith(fontSize: 24),
+        ),
         actions: [
           if (user != null)
             PopupMenuButton<String>(
@@ -72,15 +96,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
               ],
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundImage: user.photoUrl != null
-                      ? NetworkImage(user.photoUrl!)
-                      : null,
-                  child: user.photoUrl == null
-                      ? Text(user.displayName[0].toUpperCase())
-                      : null,
+                padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: colorScheme.primary.withValues(alpha: 0.3),
+                      width: 2,
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    radius: 16,
+                    backgroundColor:
+                        colorScheme.primary.withValues(alpha: 0.1),
+                    backgroundImage: user.photoUrl != null
+                        ? NetworkImage(user.photoUrl!)
+                        : null,
+                    child: user.photoUrl == null
+                        ? Text(
+                            user.displayName[0].toUpperCase(),
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        : null,
+                  ),
                 ),
               ),
             ),
@@ -89,48 +130,75 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       body: Column(
         children: [
           // Queue banner
-          if (_queuedCount > 0)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              color: const Color(0xFFF9AB00).withValues(alpha: 0.15),
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_off, color: Color(0xFFF9AB00), size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    '$_queuedCount submission${_queuedCount > 1 ? 's' : ''} waiting to sync',
-                    style: const TextStyle(
-                      color: Color(0xFF202124),
-                      fontSize: 14,
+          AnimatedSlide(
+            offset: _queuedCount > 0 ? Offset.zero : const Offset(0, -1),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+            child: AnimatedOpacity(
+              opacity: _queuedCount > 0 ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 300),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.base,
+                  vertical: Spacing.md,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.warning(context).withValues(alpha: 0.12),
+                  border: Border(
+                    bottom: BorderSide(
+                      color:
+                          AppColors.warning(context).withValues(alpha: 0.25),
                     ),
                   ),
-                ],
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.cloud_off,
+                        color: AppColors.warning(context), size: 18),
+                    const SizedBox(width: Spacing.sm),
+                    Text(
+                      '$_queuedCount submission${_queuedCount > 1 ? 's' : ''} waiting to sync',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: AppColors.warning(context),
+                          ),
+                    ),
+                  ],
+                ),
               ),
             ),
+          ),
 
           Expanded(
-            child: Center(
-              child: _buildContent(submissionState),
+            child: FadeTransition(
+              opacity: _contentAnimation,
+              child: Center(
+                child: _buildContent(submissionState),
+              ),
             ),
           ),
 
           // Attestation footer
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(Spacing.base),
             child: Text(
               'By submitting, I attest this is for valid business use.',
-              style: Theme.of(context).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppColors.textTertiary(context),
+                  ),
               textAlign: TextAlign.center,
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _openScanner(context),
-        icon: const Icon(Icons.camera_alt),
-        label: const Text('Scan Ticket'),
-        tooltip: 'Scan your parking ticket',
+      floatingActionButton: ScaleTransition(
+        scale: _fabAnimation,
+        child: FloatingActionButton.extended(
+          onPressed: () => _openScanner(context),
+          icon: const Icon(Icons.camera_alt_rounded),
+          label: const Text('Scan Ticket'),
+          tooltip: 'Scan your parking ticket',
+        ),
       ),
     );
   }
@@ -138,45 +206,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   Widget _buildContent(SubmissionState submissionState) {
     // Show today's submission card if we have one.
     if (submissionState is SubmissionSuccess) {
-      return _TodayCard(
+      return TicketCard(
         ticketNumber: submissionState.submission.ticketNumber,
-        timestamp: submissionState.submission.timestamp,
-        isQueued: false,
+        subtitle: submissionState.submission.timestamp,
+        badge: _StatusBadge(
+          label: 'Submitted',
+          icon: Icons.cloud_done_outlined,
+          color: Theme.of(context).colorScheme.primary,
+        ),
       );
     }
     if (submissionState is SubmissionQueued) {
-      return _TodayCard(
+      return TicketCard(
         ticketNumber: submissionState.submission.ticketNumber,
-        timestamp: submissionState.submission.timestamp,
-        isQueued: true,
+        subtitle: submissionState.submission.timestamp,
+        badge: _StatusBadge(
+          label: 'Queued',
+          icon: Icons.cloud_off_outlined,
+          color: AppColors.warning(context),
+        ),
       );
     }
 
     // Empty state
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Icon(
-          Icons.directions_car_outlined,
-          size: 80,
-          color: Colors.grey.shade300,
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'Ready to Scan',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Tap the button below to scan your parking ticket.',
-          style: TextStyle(fontSize: 14, color: Colors.grey.shade400),
-        ),
-      ],
-    );
+    return _EmptyState();
   }
 
   void _openScanner(BuildContext context) {
@@ -186,69 +239,142 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 }
 
-class _TodayCard extends StatelessWidget {
-  final String ticketNumber;
-  final String timestamp;
-  final bool isQueued;
+class _StatusBadge extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
 
-  const _TodayCard({
-    required this.ticketNumber,
-    required this.timestamp,
-    required this.isQueued,
+  const _StatusBadge({
+    required this.label,
+    required this.icon,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.all(24),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isQueued ? Icons.cloud_off : Icons.hourglass_top,
-                  color: isQueued
-                      ? const Color(0xFFF9AB00)
-                      : const Color(0xFF1A73E8),
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  isQueued ? 'Queued' : 'Submitted',
-                  style: TextStyle(
-                    color: isQueued
-                        ? const Color(0xFFF9AB00)
-                        : const Color(0xFF1A73E8),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              ticketNumber,
-              style: const TextStyle(
-                fontFamily: 'RobotoMono',
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF202124),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              timestamp,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF5F6368),
-              ),
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.md,
+        vertical: Spacing.xs,
       ),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: Spacing.xs),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatefulWidget {
+  @override
+  State<_EmptyState> createState() => _EmptyStateState();
+}
+
+class _EmptyStateState extends State<_EmptyState>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // Animated ticket outline
+        AnimatedBuilder(
+          animation: _pulseController,
+          builder: (context, child) {
+            final opacity = 0.15 + (_pulseController.value * 0.15);
+            return Container(
+              width: 100,
+              height: 120,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: opacity),
+                  width: 2,
+                  strokeAlign: BorderSide.strokeAlignInside,
+                ),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.confirmation_number_outlined,
+                    size: 36,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .primary
+                        .withValues(alpha: opacity + 0.1),
+                  ),
+                  const SizedBox(height: Spacing.sm),
+                  // Dashed lines suggesting text
+                  for (var i = 0; i < 3; i++) ...[
+                    Container(
+                      width: 40.0 - (i * 8),
+                      height: 2,
+                      margin: const EdgeInsets.only(bottom: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.divider(context)
+                            .withValues(alpha: isDark ? 0.4 : 0.6),
+                        borderRadius: BorderRadius.circular(1),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: Spacing.lg),
+        Text(
+          'Ready to Scan',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: AppColors.textSecondary(context),
+              ),
+        ),
+        const SizedBox(height: Spacing.sm),
+        Text(
+          'Tap below to scan your parking ticket',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: AppColors.textTertiary(context),
+              ),
+        ),
+      ],
     );
   }
 }

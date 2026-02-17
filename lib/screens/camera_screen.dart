@@ -1,9 +1,12 @@
+import 'dart:ui';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import '../models/ocr_result.dart';
 import '../services/ocr_service.dart';
+import '../theme/app_colors.dart';
+import '../widgets/scan_overlay.dart';
 import 'confirmation_screen.dart';
 import 'manual_review_screen.dart';
 
@@ -15,16 +18,21 @@ class CameraScreen extends ConsumerStatefulWidget {
 }
 
 class _CameraScreenState extends ConsumerState<CameraScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   CameraController? _controller;
   final OcrService _ocrService = OcrService();
   bool _isProcessing = false;
   FlashMode _flashMode = FlashMode.auto;
+  late final AnimationController _captureAnimController;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _captureAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 150),
+    );
     _initCamera();
   }
 
@@ -33,6 +41,7 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
     WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     _ocrService.dispose();
+    _captureAnimController.dispose();
     super.dispose();
   }
 
@@ -82,6 +91,11 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
       return;
     }
 
+    // Capture animation
+    _captureAnimController.forward().then((_) {
+      _captureAnimController.reverse();
+    });
+
     setState(() => _isProcessing = true);
 
     try {
@@ -104,14 +118,6 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
             ),
           );
         case OcrConfidence.low:
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) => ManualReviewScreen(
-                imagePath: image.path,
-                ocrResult: ocrResult,
-              ),
-            ),
-          );
         case OcrConfidence.ambiguous:
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(
@@ -148,6 +154,8 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   Widget build(BuildContext context) {
     final isReady =
         _controller != null && _controller!.value.isInitialized;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final topPad = MediaQuery.of(context).padding.top;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -163,100 +171,93 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
               child: CircularProgressIndicator(color: Colors.white),
             ),
 
-          // Overlay guide
+          // Corner bracket overlay
           Positioned.fill(
-            child: CustomPaint(
-              painter: _ScanOverlayPainter(),
-            ),
+            child: ScanOverlay(isProcessing: _isProcessing),
           ),
 
-          // "Align your parking ticket" text
+          // Instruction text
           Positioned(
-            top: MediaQuery.of(context).padding.top + 80,
+            top: topPad + 80,
             left: 0,
             right: 0,
-            child: const Text(
-              'Align your parking ticket in the frame',
+            child: Text(
+              _isProcessing
+                  ? 'Reading ticket...'
+                  : 'Align your parking ticket in the frame',
               textAlign: TextAlign.center,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
-                shadows: [Shadow(blurRadius: 4, color: Colors.black54)],
+                shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
               ),
             ),
           ),
 
-          // Processing overlay
-          if (_isProcessing)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black54,
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(color: Colors.white),
-                      SizedBox(height: 16),
-                      Text(
-                        'Reading ticket...',
-                        style: TextStyle(color: Colors.white, fontSize: 16),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          // Close button (top-left)
+          // Close button (top-left) — frosted glass pill
           Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            left: 8,
-            child: IconButton(
-              onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+            top: topPad + Spacing.sm,
+            left: Spacing.sm,
+            child: _FrostedButton(
+              onTap: () => Navigator.of(context).pop(),
+              icon: Icons.close,
               tooltip: 'Close camera',
             ),
           ),
 
-          // Flash toggle (top-right)
+          // Flash toggle (top-right) — frosted glass pill
           Positioned(
-            top: MediaQuery.of(context).padding.top + 8,
-            right: 8,
-            child: IconButton(
-              onPressed: _toggleFlash,
-              icon: Icon(
-                switch (_flashMode) {
-                  FlashMode.auto => Icons.flash_auto,
-                  FlashMode.always => Icons.flash_on,
-                  FlashMode.off => Icons.flash_off,
-                  _ => Icons.flash_auto,
-                },
-                color: Colors.white,
-                size: 28,
-              ),
+            top: topPad + Spacing.sm,
+            right: Spacing.sm,
+            child: _FrostedButton(
+              onTap: _toggleFlash,
+              icon: switch (_flashMode) {
+                FlashMode.auto => Icons.flash_auto,
+                FlashMode.always => Icons.flash_on,
+                FlashMode.off => Icons.flash_off,
+                _ => Icons.flash_auto,
+              },
               tooltip: 'Toggle flash',
             ),
           ),
 
           // Capture button (center-bottom)
           Positioned(
-            bottom: MediaQuery.of(context).padding.bottom + 32,
+            bottom: bottomPad + Spacing.xl,
             left: 0,
             right: 0,
             child: Center(
-              child: GestureDetector(
-                onTap: _isProcessing ? null : _captureAndProcess,
-                child: Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
-                    color: Colors.white.withValues(alpha: 0.3),
-                  ),
-                  child: const Center(
-                    child: Icon(Icons.camera, color: Colors.white, size: 32),
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 1.0, end: 0.9)
+                    .animate(_captureAnimController),
+                child: GestureDetector(
+                  onTap: _isProcessing ? null : _captureAndProcess,
+                  child: Container(
+                    width: 76,
+                    height: 76,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _isProcessing
+                            ? Colors.white.withValues(alpha: 0.3)
+                            : Colors.white,
+                      ),
+                      child: _isProcessing
+                          ? const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : null,
+                    ),
                   ),
                 ),
               ),
@@ -268,42 +269,43 @@ class _CameraScreenState extends ConsumerState<CameraScreen>
   }
 }
 
-/// Draws a semi-transparent overlay with a clear rectangle in the center.
-class _ScanOverlayPainter extends CustomPainter {
+/// Frosted glass icon button for camera controls.
+class _FrostedButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final IconData icon;
+  final String tooltip;
+
+  const _FrostedButton({
+    required this.onTap,
+    required this.icon,
+    required this.tooltip,
+  });
+
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black.withValues(alpha: 0.5);
-
-    final rectWidth = size.width * 0.85;
-    final rectHeight = size.height * 0.35;
-    final left = (size.width - rectWidth) / 2;
-    final top = (size.height - rectHeight) / 2;
-
-    final scanRect = Rect.fromLTWH(left, top, rectWidth, rectHeight);
-
-    // Draw overlay around the scan area
-    canvas.drawPath(
-      Path.combine(
-        PathOperation.difference,
-        Path()..addRect(Rect.fromLTWH(0, 0, size.width, size.height)),
-        Path()
-          ..addRRect(
-              RRect.fromRectAndRadius(scanRect, const Radius.circular(12))),
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: Colors.white.withValues(alpha: 0.15),
+                ),
+              ),
+              child: Icon(icon, color: Colors.white, size: 22),
+            ),
+          ),
+        ),
       ),
-      paint,
-    );
-
-    // Draw border around scan area
-    final borderPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(scanRect, const Radius.circular(12)),
-      borderPaint,
     );
   }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

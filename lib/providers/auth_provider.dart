@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
@@ -18,6 +19,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _init() async {
+    if (kIsWeb) {
+      state = AuthAuthenticated(UserProfile(
+        displayName: 'Demo User',
+        email: 'demo@google.com',
+        ldap: 'demo',
+      ));
+      return;
+    }
     try {
       final user = await _service.silentSignIn();
       if (user != null) {
@@ -34,6 +43,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthLoading();
     try {
       final user = await _service.signIn();
+      if (!mounted) return;
       state = AuthAuthenticated(user);
     } on AuthException catch (e) {
       state = AuthError(e.message);
@@ -43,6 +53,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> signOut() async {
+    if (kIsWeb) {
+      _init();
+      return;
+    }
     await _service.signOut();
     state = const AuthUnauthenticated();
   }

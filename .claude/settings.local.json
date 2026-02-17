@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(export PATH=\"/opt/homebrew/bin:$HOME/development/flutter/bin:$PATH\")",
+      "Bash(flutter clean:*)",
+      "Bash(flutter pub get:*)",
+      "Bash(flutter run:*)",
+      "Bash(export PATH=\"$HOME/development/flutter/bin:$PATH\")",
+      "Bash(flutter devices:*)"
+    ]
+  }
+}

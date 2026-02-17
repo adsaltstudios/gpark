@@ -70,19 +70,23 @@ class SubmissionNotifier extends StateNotifier<SubmissionState> {
     state = const SubmissionSubmitting();
 
     final isOnline = await _connectivityService.checkConnectivity();
+    if (!mounted) return;
     if (!isOnline) {
       await _queueService.enqueue(submission);
+      if (!mounted) return;
       state = SubmissionQueued(submission);
       return;
     }
 
     final response = await _submissionService.submit(submission);
+    if (!mounted) return;
     if (response.isSuccess) {
       state = SubmissionSuccess(submission, response);
     } else if (response.isDuplicate) {
       state = SubmissionDuplicate(response);
     } else {
       await _queueService.enqueue(submission);
+      if (!mounted) return;
       state = SubmissionError(
         response.message ?? 'Submission failed.',
         submission,

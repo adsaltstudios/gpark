@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/ocr_result.dart';
 import '../providers/submission_provider.dart';
+import '../theme/app_colors.dart';
+import '../theme/app_typography.dart';
 import 'camera_screen.dart';
 import 'success_screen.dart';
 import 'error_screen.dart';
@@ -90,12 +92,14 @@ class _ManualReviewScreenState extends ConsumerState<ManualReviewScreen> {
     final candidates = widget.ocrResult?.candidates ?? [];
     final isAmbiguous =
         widget.ocrResult?.confidence == OcrConfidence.ambiguous;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Manual Review'),
         leading: IconButton(
-          onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+          onPressed: () =>
+              Navigator.of(context).popUntil((route) => route.isFirst),
           icon: const Icon(Icons.close),
           tooltip: 'Cancel',
         ),
@@ -104,18 +108,30 @@ class _ManualReviewScreenState extends ConsumerState<ManualReviewScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Captured image
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 250),
-              child: Image.file(
-                File(widget.imagePath),
-                fit: BoxFit.contain,
+            // Captured image with frame
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: Spacing.lg),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.divider(context),
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(13),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 250),
+                  child: Image.file(
+                    File(widget.imagePath),
+                    fit: BoxFit.contain,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: Spacing.base),
 
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -124,33 +140,37 @@ class _ManualReviewScreenState extends ConsumerState<ManualReviewScreen> {
                     isAmbiguous
                         ? 'Multiple ticket numbers found. Select the correct one or type it below.'
                         : 'We could not read the ticket clearly. Please type or correct the ticket number below.',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF5F6368),
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AppColors.textSecondary(context),
+                        ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: Spacing.base),
 
                   // Ambiguous candidates as chips
                   if (isAmbiguous && candidates.length > 1) ...[
                     Wrap(
-                      spacing: 8,
-                      children: candidates.map((num) {
+                      spacing: Spacing.sm,
+                      runSpacing: Spacing.sm,
+                      children: candidates.map((candidate) {
+                        final isSelected = _controller.text == candidate;
                         return ChoiceChip(
                           label: Text(
-                            num,
-                            style: const TextStyle(fontFamily: 'RobotoMono'),
+                            candidate,
+                            style: AppTypography.ticketInput(context)
+                                .copyWith(fontSize: 14),
                           ),
-                          selected: _controller.text == num,
+                          selected: isSelected,
+                          selectedColor:
+                              colorScheme.primary.withValues(alpha: 0.15),
                           onSelected: (selected) {
                             if (selected) {
-                              setState(() => _controller.text = num);
+                              setState(() => _controller.text = candidate);
                             }
                           },
                         );
                       }).toList(),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: Spacing.base),
                   ],
 
                   // Ticket number input
@@ -158,11 +178,7 @@ class _ManualReviewScreenState extends ConsumerState<ManualReviewScreen> {
                     controller: _controller,
                     keyboardType: TextInputType.number,
                     maxLength: 7,
-                    style: const TextStyle(
-                      fontFamily: 'RobotoMono',
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: AppTypography.ticketInput(context),
                     decoration: InputDecoration(
                       labelText: 'Ticket Number',
                       helperText: _controller.text.isEmpty
@@ -172,31 +188,34 @@ class _ManualReviewScreenState extends ConsumerState<ManualReviewScreen> {
                               : '${7 - _controller.text.length} more digit${7 - _controller.text.length != 1 ? 's' : ''} needed',
                       helperStyle: TextStyle(
                         color: _isValid
-                            ? const Color(0xFF34A853)
-                            : const Color(0xFF5F6368),
+                            ? AppColors.success(context)
+                            : AppColors.textSecondary(context),
                       ),
-                      border: const OutlineInputBorder(),
                       counterText: '',
+                      suffixIcon: _isValid
+                          ? Icon(Icons.check_circle,
+                              color: AppColors.success(context), size: 22)
+                          : null,
                     ),
                     onChanged: (_) => setState(() {}),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: Spacing.lg),
 
                   // Actions
                   FilledButton(
                     onPressed: _isValid && !_isSubmitting ? _submit : null,
                     child: _isSubmitting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                        ? SizedBox(
+                            width: 22,
+                            height: 22,
                             child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
+                              strokeWidth: 2.5,
+                              color: colorScheme.onPrimary,
                             ),
                           )
                         : const Text('Submit'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: Spacing.md),
                   OutlinedButton.icon(
                     onPressed: _isSubmitting
                         ? null
@@ -206,7 +225,7 @@ class _ManualReviewScreenState extends ConsumerState<ManualReviewScreen> {
                                   builder: (_) => const CameraScreen()),
                             );
                           },
-                    icon: const Icon(Icons.camera_alt),
+                    icon: const Icon(Icons.camera_alt_rounded, size: 20),
                     label: const Text('Rescan'),
                   ),
                 ],
