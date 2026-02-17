@@ -5,7 +5,7 @@ class Constants {
 
   // --- Endpoints ---
   static const String appsScriptUrl =
-      'https://script.google.com/macros/s/AKfycbyWB7hA79a8IqO3hiWBpvKhaLFfg_DLPv7CZ9CbFpz9peKofziaNuTb9gQGIhPV9T86OA/exec';
+      'https://script.google.com/macros/s/AKfycbyRFbfL7C4OfXhYRESVk2z4FgvU5kc4lyWKZr2AkcV0tl5LUziutqgDMoE69GKrQkamEQ/exec';
   static const String googleFormUrl =
       'https://docs.google.com/forms/d/FORM_ID/viewform';
 
